@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  fail2ban_lite:
+    build: .
+    container_name: fail2ban_lite
+    volumes:
+      - ./logs:/app/logs
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    restart: always
+    privileged: true
+    network_mode: host
