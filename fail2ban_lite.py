@@ -9,7 +9,7 @@ import sys
 
 # Configuration
 MAX_ATTEMPTS = 3
-BAN_TIME = 300  # Ban duration in seconds (5 minutes)
+BAN_TIME = 31536000  # Ban duration in seconds (1 year)
 
 # Ensure the logs directory exists
 os.makedirs('/app/logs', exist_ok=True)
@@ -31,31 +31,31 @@ def tail_journal():
             else:
                 time.sleep(0.1)
 
-def is_ip_banned(ip_address):
-    return ip_address in banned_ips and time.time() < banned_ips[ip_address]
+def is_ip_banned(ip):
+    return ip in banned_ips and time.time() < banned_ips[ip]
 
-def ban_ip(ip_address):
-    if not is_ip_banned(ip_address):
+def ban_ip(ip):
+    if not is_ip_banned(ip):
         try:
-            subprocess.run(["iptables", "-A", "INPUT", "-s", ip_address, "-j", "DROP"], check=True)
+            subprocess.run(["iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"], check=True)
             ban_end_time = time.time() + BAN_TIME
-            banned_ips[ip_address] = ban_end_time
-            logging.info("Banned IP: %s", ip_address)
+            banned_ips[ip] = ban_end_time
+            logging.info("Banned IP: %s for 1 year", ip)
             # Schedule unban
-            threading.Timer(BAN_TIME, unban_ip, args=[ip_address]).start()
+            threading.Timer(BAN_TIME, unban_ip, args=[ip]).start()
         except subprocess.CalledProcessError as e:
-            logging.error("Failed to ban IP %s: %s", ip_address, e)
+            logging.error("Failed to ban IP %s: %s", ip, e)
     else:
-        logging.info("IP %s is already banned. Skipping.", ip_address)
+        logging.info("IP %s is already banned. Skipping.", ip)
 
-def unban_ip(ip_address):
-    if ip_address in banned_ips:
+def unban_ip(ip):
+    if ip in banned_ips:
         try:
-            subprocess.run(["iptables", "-D", "INPUT", "-s", ip_address, "-j", "DROP"], check=True)
-            del banned_ips[ip_address]
-            logging.info("Unbanned IP: %s", ip_address)
+            subprocess.run(["iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"], check=True)
+            del banned_ips[ip]
+            logging.info("Unbanned IP: %s", ip)
         except subprocess.CalledProcessError as e:
-            logging.error("Failed to unban IP %s: %s", ip_address, e)
+            logging.error("Failed to unban IP %s: %s", ip, e)
 
 def list_banned_ips():
     try:
@@ -65,8 +65,7 @@ def list_banned_ips():
             if "DROP" in line:
                 parts = line.split()
                 if len(parts) >= 4 and parts[3].count('.') == 3:  # Simple check for IPv4 format
-                    ip_address = parts[3]
-                    banned.append(ip_address)
+                    banned.append(parts[3])
         logging.info("Currently banned IPs: %s", banned)
         return banned
     except subprocess.CalledProcessError as e:
@@ -76,8 +75,8 @@ def list_banned_ips():
 def load_existing_bans():
     banned = list_banned_ips()
     current_time = time.time()
-    for ip_address in banned:
-        banned_ips[ip_address] = current_time + BAN_TIME
+    for ip in banned:
+        banned_ips[ip] = current_time + BAN_TIME
     logging.info("Loaded %d existing bans from iptables", len(banned))
 
 def main():
@@ -92,17 +91,17 @@ def main():
                 match = re.search(r"Invalid user \w+ from (\d+\.\d+\.\d+\.\d+)", line)
             
             if match:
-                ip_address = match.group(1)
-                if not is_ip_banned(ip_address):
-                    failed_attempts[ip_address] += 1
-                    logging.info("Potential failed attempt from IP: %s (Count: %d)", ip_address, failed_attempts[ip_address])
+                ip = match.group(1)
+                if not is_ip_banned(ip):
+                    failed_attempts[ip] += 1
+                    logging.info("Potential failed attempt from IP: %s (Count: %d)", ip, failed_attempts[ip])
                     logging.info("Full log line: %s", line)
                     
-                    if failed_attempts[ip_address] >= MAX_ATTEMPTS:
-                        ban_ip(ip_address)
-                        failed_attempts[ip_address] = 0
+                    if failed_attempts[ip] >= MAX_ATTEMPTS:
+                        ban_ip(ip)
+                        failed_attempts[ip] = 0
                 else:
-                    logging.info("Blocked attempt from banned IP: %s", ip_address)
+                    logging.info("Blocked attempt from banned IP: %s", ip)
 
             # Periodically list banned IPs (every 5 minutes)
             if int(time.time()) % 300 == 0:
@@ -118,8 +117,8 @@ if __name__ == "__main__":
         banned_list = list_banned_ips()
         if banned_list:
             print("Currently banned IPs:")
-            for ip_address in banned_list:
-                print(ip_address)
+            for ip in banned_list:
+                print(ip)
         else:
             print("No IPs are currently banned.")
     else:
