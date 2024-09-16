@@ -21,5 +21,4 @@ jobs:
         script: |
           cd /home/organic/dev/fail2ban_lite
           git pull origin main
-          docker-compose down
-          docker-compose up -d --build
+          docker-compose pull && docker-compose up -d --build --force-recreate --remove-orphans
