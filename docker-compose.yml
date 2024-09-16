@@ -8,6 +8,8 @@ services:
       - /var/log/journal:/var/log/journal:ro
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
+    ports:
+      - "8081:8080"  # Changed from "8080:8080"
     restart: always
     privileged: true
     network_mode: host
