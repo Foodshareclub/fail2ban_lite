@@ -5,18 +5,16 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./whitelist.txt:/app/config/whitelist.txt
-      - /var/log/journal:/var/log/journal:ro
-      - /run/log/journal:/run/log/journal:ro
-      - /etc/machine-id:/etc/machine-id:ro
+      - /var/log:/var/log:ro  # Mount host's log directory
     ports:
-      - "8081:8082"  # Changed from "8081:8080"
+      - "8081:8082"
     restart: always
     privileged: true
     network_mode: host
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]  # Changed port to 8082
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
       interval: 1m
       timeout: 10s
       retries: 3

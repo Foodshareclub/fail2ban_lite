@@ -1,0 +1,25 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main  # or your default branch name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Deploy to server
+      uses: appleboy/ssh-action@master
+      with:
+        host: vpswest.westus.cloudapp.azure.com
+        username: organic
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /home/organic/dev/fail2ban_lite
+          git pull origin main
+          docker-compose down
+          docker-compose up -d --build

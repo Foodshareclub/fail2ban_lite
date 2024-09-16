@@ -15,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 import signal
 from logging.handlers import RotatingFileHandler
 from flask import Flask
+import glob
 
 # Load environment variables from .env file
 load_dotenv()
@@ -66,14 +67,24 @@ def load_whitelist():
 
 whitelist = load_whitelist()
 
-def tail_journal():
-    with subprocess.Popen(JOURNAL_CMD, stdout=subprocess.PIPE, universal_newlines=True) as process:
+# Replace the tail_journal function with this:
+def tail_log_files():
+    log_files = glob.glob('/var/log/auth.log*')
+    if not log_files:
+        log_files = glob.glob('/var/log/secure*')
+    if not log_files:
+        logging.error("No suitable log files found")
+        return
+
+    log_files.sort(key=os.path.getmtime, reverse=True)
+    with open(log_files[0], 'r') as f:
+        f.seek(0, 2)  # Go to the end of the file
         while True:
-            line = process.stdout.readline()
-            if line:
-                yield line.strip()
-            else:
+            line = f.readline()
+            if not line:
                 time.sleep(0.1)
+                continue
+            yield line.strip()
 
 def is_ip_banned(ip):
     return ip in banned_ips and time.time() < banned_ips[ip]
@@ -171,7 +182,7 @@ def main():
     failed_attempts = defaultdict(int)
 
     try:
-        for line in tail_journal():
+        for line in tail_log_files():  # Changed from tail_journal to tail_log_files
             match = re.search(r"Failed password.*from (\d+\.\d+\.\d+\.\d+)", line)
             if not match:
                 match = re.search(r"Invalid user \w+ from (\d+\.\d+\.\d+\.\d+)", line)
