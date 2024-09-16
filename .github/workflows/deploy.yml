@@ -17,6 +17,7 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         script: |
           cd /home/organic/dev/fail2ban_lite
-          git fetch origin main
-          git reset --hard origin/main
-          docker-compose pull && docker-compose up -d --build --force-recreate --remove-orphans
+          sudo git config --global --add safe.directory /home/organic/dev/fail2ban_lite
+          sudo git fetch origin main
+          sudo git reset --hard origin/main
+          sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
