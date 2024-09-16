@@ -37,3 +37,51 @@ jobs:
           sudo git fetch origin main
           sudo git reset --hard origin/main
           sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
+
+  deploy-to-monitoring-foodshare:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to Monitoring Foodshare
+      uses: appleboy/ssh-action@master
+      with:
+        host: monitoring-foodshare.uksouth.cloudapp.azure.com
+        username: organic
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /home/organic/dev/fail2ban_lite
+          sudo git config --global --add safe.directory /home/organic/dev/fail2ban_lite
+          sudo git fetch origin main
+          sudo git reset --hard origin/main
+          sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
+
+  deploy-to-foodshare-poland:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to Foodshare Poland
+      uses: appleboy/ssh-action@master
+      with:
+        host: foodshare.polandcentral.cloudapp.azure.com
+        username: organic
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /home/organic/dev/fail2ban_lite
+          sudo git config --global --add safe.directory /home/organic/dev/fail2ban_lite
+          sudo git fetch origin main
+          sudo git reset --hard origin/main
+          sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
+
+  deploy-to-web-poland:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to Web Poland
+      uses: appleboy/ssh-action@master
+      with:
+        host: web.polandcentral.cloudapp.azure.com
+        username: organic
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /home/organic/dev/fail2ban_lite
+          sudo git config --global --add safe.directory /home/organic/dev/fail2ban_lite
+          sudo git fetch origin main
+          sudo git reset --hard origin/main
+          sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
