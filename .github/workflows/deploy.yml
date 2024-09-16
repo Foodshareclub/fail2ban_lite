@@ -1,4 +1,4 @@
-name: Deploy to Server
+name: Deploy to Servers
 
 on:
   push:
@@ -6,13 +6,29 @@ on:
       - main  # or your default branch name
 
 jobs:
-  deploy:
+  deploy-to-vpswest:
     runs-on: ubuntu-latest
     steps:
-    - name: Deploy to server
+    - name: Deploy to VPS West
       uses: appleboy/ssh-action@master
       with:
         host: vpswest.westus.cloudapp.azure.com
+        username: organic
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd /home/organic/dev/fail2ban_lite
+          sudo git config --global --add safe.directory /home/organic/dev/fail2ban_lite
+          sudo git fetch origin main
+          sudo git reset --hard origin/main
+          sudo docker-compose pull && sudo docker-compose up -d --build --force-recreate --remove-orphans
+
+  deploy-to-vpngermany:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to VPN Germany
+      uses: appleboy/ssh-action@master
+      with:
+        host: vpngermany.germanywestcentral.cloudapp.azure.com
         username: organic
         key: ${{ secrets.SERVER_SSH_KEY }}
         script: |
