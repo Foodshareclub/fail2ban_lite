@@ -8,20 +8,44 @@ import threading
 import sys
 import argparse
 from ipaddress import ip_address, ip_network
+from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import signal
+from logging.handlers import RotatingFileHandler
+from flask import Flask
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configuration
-MAX_ATTEMPTS = 3
-BAN_TIME = 31536000  # Ban duration in seconds (1 year)
-LOG_FILE = '/app/logs/fail2ban_lite.log'
-WHITELIST_FILE = '/app/config/whitelist.txt'
+MAX_ATTEMPTS = int(os.getenv('MAX_ATTEMPTS', 3))
+BAN_TIME = int(os.getenv('BAN_TIME', 31536000))  # Ban duration in seconds (1 year)
+LOG_FILE = os.getenv('LOG_FILE', '/app/logs/fail2ban_lite.log')
+WHITELIST_FILE = os.getenv('WHITELIST_FILE', '/app/config/whitelist.txt')
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+JOURNAL_CMD = os.getenv('JOURNAL_CMD', 'journalctl -f -n 0').split()
+EMAIL_ENABLED = os.getenv('EMAIL_ENABLED', 'false').lower() == 'true'
+EMAIL_NOTIFICATIONS_ENABLED = os.getenv('EMAIL_NOTIFICATIONS_ENABLED', 'false').lower() == 'true'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 25))
+EMAIL_USER = os.getenv('EMAIL_USER', '')
+EMAIL_PASS = os.getenv('EMAIL_PASS', '')
+EMAIL_FROM = os.getenv('EMAIL_FROM', 'fail2ban@example.com')
+EMAIL_TO = os.getenv('EMAIL_TO', 'admin@example.com')
 
 # Ensure the logs and config directories exist
 os.makedirs('/app/logs', exist_ok=True)
 os.makedirs('/app/config', exist_ok=True)
 
-# Set up logging
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+# Set up logging with rotation
+handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=5)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+handler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+logger.addHandler(handler)
 
 # Dictionary to keep track of banned IPs and their ban end times
 banned_ips = {}
@@ -30,21 +54,20 @@ banned_ips = {}
 def load_whitelist():
     whitelist = set()
     if os.path.exists(WHITELIST_FILE):
-        with open(WHITELIST_FILE, 'r') as f:
+        with open(WHITELIST_FILE, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
                     try:
                         whitelist.add(ip_network(line))
                     except ValueError:
-                        logging.warning(f"Invalid IP or network in whitelist: {line}")
+                        logging.warning("Invalid IP or network in whitelist: %s", line)
     return whitelist
 
 whitelist = load_whitelist()
 
 def tail_journal():
-    cmd = ["journalctl", "-f", "-n", "0"]
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True) as process:
+    with subprocess.Popen(JOURNAL_CMD, stdout=subprocess.PIPE, universal_newlines=True) as process:
         while True:
             line = process.stdout.readline()
             if line:
@@ -64,7 +87,8 @@ def ban_ip(ip):
             subprocess.run(["iptables", "-A", "INPUT", "-s", ip, "-j", "DROP"], check=True)
             ban_end_time = time.time() + BAN_TIME
             banned_ips[ip] = ban_end_time
-            logging.info("Banned IP: %s for 1 year", ip)
+            logging.info("Banned IP: %s for %d seconds", ip, BAN_TIME)
+            send_email("IP Banned", f"The IP {ip} has been banned for {BAN_TIME} seconds.")
             # Schedule unban
             threading.Timer(BAN_TIME, unban_ip, args=[ip]).start()
         except subprocess.CalledProcessError as e:
@@ -80,6 +104,7 @@ def unban_ip(ip):
             subprocess.run(["iptables", "-D", "INPUT", "-s", ip, "-j", "DROP"], check=True)
             del banned_ips[ip]
             logging.info("Unbanned IP: %s", ip)
+            send_email("IP Unbanned", f"The IP {ip} has been unbanned.")
         except subprocess.CalledProcessError as e:
             logging.error("Failed to unban IP %s: %s", ip, e)
 
@@ -104,6 +129,41 @@ def load_existing_bans():
     for ip in banned:
         banned_ips[ip] = current_time + BAN_TIME
     logging.info("Loaded %d existing bans from iptables", len(banned))
+
+def reload_config(signum, frame):
+    global MAX_ATTEMPTS, BAN_TIME, LOG_LEVEL, whitelist
+    load_dotenv()
+    MAX_ATTEMPTS = int(os.getenv('MAX_ATTEMPTS', 3))
+    BAN_TIME = int(os.getenv('BAN_TIME', 31536000))
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    logging.getLogger().setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    whitelist = load_whitelist()
+    logging.info("Configuration reloaded")
+
+signal.signal(signal.SIGHUP, reload_config)
+
+def send_email(subject, body):
+    if not EMAIL_ENABLED or not EMAIL_NOTIFICATIONS_ENABLED:
+        return
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_FROM
+    msg['To'] = EMAIL_TO
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+    try:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+            if EMAIL_USER and EMAIL_PASS:
+                server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
+        logging.info("Sent email notification to %s", EMAIL_TO)
+    except Exception as e:
+        logging.error("Failed to send email: %s", e)
+
+app = Flask(__name__)
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 def main():
     logging.info("Fail2Ban Lite started")
@@ -140,6 +200,8 @@ def main():
         logging.error("An unexpected error occurred: %s", str(e))
     finally:
         logging.info("Fail2Ban Lite stopped")
+
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8080)).start()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fail2Ban Lite")

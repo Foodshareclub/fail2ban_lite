@@ -4,9 +4,17 @@ services:
     container_name: fail2ban_lite
     volumes:
       - ./logs:/app/logs
+      - ./whitelist.txt:/app/config/whitelist.txt
       - /var/log/journal:/var/log/journal:ro
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
     restart: always
     privileged: true
     network_mode: host
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
