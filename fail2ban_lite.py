@@ -201,7 +201,7 @@ def main():
     finally:
         logging.info("Fail2Ban Lite stopped")
 
-    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8080)).start()
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8082)).start()  # Changed port to 8082
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fail2Ban Lite")

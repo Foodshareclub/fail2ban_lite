@@ -9,14 +9,14 @@ services:
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
     ports:
-      - "8081:8080"  # Changed from "8080:8080"
+      - "8081:8082"  # Changed from "8081:8080"
     restart: always
     privileged: true
     network_mode: host
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]  # Changed port to 8082
       interval: 1m
       timeout: 10s
       retries: 3
