@@ -9,9 +9,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
     - name: Deploy to server
       uses: appleboy/ssh-action@master
       with:
@@ -20,5 +17,6 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         script: |
           cd /home/organic/dev/fail2ban_lite
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
           docker-compose pull && docker-compose up -d --build --force-recreate --remove-orphans
